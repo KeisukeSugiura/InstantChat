@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en" style="width:100%;height:100%;">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <title>Instant Message</title>
+  <script src="/socket.io/socket.io.js"></script>
+
+  <script src="//code.jquery.com/jquery-1.10.2.min.js"></script>
+  <!-- Material Design fonts -->
+  <link rel="stylesheet" type="text/css" href="//fonts.googleapis.com/css?family=Roboto:300,400,500,700">
+  <link rel="stylesheet" type="text/css" href="//fonts.googleapis.com/icon?family=Material+Icons">
+
+  <!-- Bootstrap -->
+  <link rel="stylesheet" type="text/css" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+
+  <!-- Bootstrap Material Design -->
+  <link rel="stylesheet" type="text/css" href="./css/bootstrap-material-design.css">
+  <link rel="stylesheet" type="text/css" href="./css/ripples.min.css">
+</head>
+
+<body style="width:100%;height:100%;margin:0px;">
+
+<div class="navbar navbar-default">
+  <div class="container-fluid">
+    <div class="navbar-header">
+      <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-responsive-collapse">
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+      </button>
+      <a class="navbar-brand" href="http://127.0.0.1:50100">Instant Message</a>
+    </div>
+  </div>
+</div>
+
+<div class="container" style="height:70%;">
+  <div class="row" style="height:100%;">
+    <div class="col-md-3" style="height:100%;">
+      <div class="panel panel-default" style="height:100%;">
+        <div class="panel-heading">
+          <h4>あなた</h4>
+        </div>
+        <div class="panel-body">
+
+              <input class="form-control" id="name_input" type="text">
+
+              <button class="btn btn-raised btn-primary" id="name_button">update</button>
+
+        </div>
+        <div class="panel-heading">
+          <h4>参加メンバー</h4>
+        </div>
+        <div class="panel-body" id="members_div">
+        </div>
+      </div>
+    </div>
+    <div class="col-md-9" style="height:100%;">
+      <div class="panel panel-default" style="height:100%;overflow:scroll;">
+        <div class="panel-body" id="message_div" >
+
+        </div>
+      </div>
+      <div class="panel panel-default">
+        <div class="panel-body">
+          <div class="form-group label-floating">
+            <label class="control-label" for="message_input">Write something to send</label>
+            <input class="form-control" id="message_input" type="text">
+            <button class="btn btn-raised btn-primary" id="message_button">send</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+  <script src="//cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.6/js/bootstrap.min.js"></script>
+  <script src="./js/material.js"></script>
+  <script src="./js/ripples.min.js"></script>
+  <script>
+    $.material.init();
+
+    const SOCKET_URL = "http://127.0.0.1:50100";
+    var socket = io.connect(SOCKET_URL);
+
+    socket.emit('requestName',{});
+
+    const members_div = document.getElementById("members_div");
+
+    const name_input = document.getElementById("name_input");
+    const name_button = document.getElementById("name_button");
+
+    const message_input = document.getElementById("message_input");
+    const message_button = document.getElementById("message_button");
+    const message_div = document.getElementById("message_div");
+
+    var messages = []; //name, id, time, message
+    var members = []; // name, id
+    var my_id = "";
+    var my_name = "";
+
+    /*
+        Socket.io EventListener
+    */
+
+
+    socket.on('requestName',function(data){
+      console.log(data);//name, id
+      name_input.value = data.name;
+      my_id = data.id;
+      my_name = name_input.value;
+      socket.emit('requestCurrentStatus');
+    });
+
+
+    socket.on('updateName',function(data){
+      console.log("updateName");
+        updateMessageName(data.member);
+        updateMemberElement(data.member);
+    });
+
+    socket.on('currentStatus',function(data){
+        data.messages.forEach(function(elm,ind,arr){
+            createMessageElement(elm);
+        });
+        data.members.forEach(function(elm,ind,arr){
+            if(elm.id != my_id){
+
+              createMemberElement(elm);
+            }
+        });
+    });
+
+    socket.on('typeStatus',function(data){
+        //TODO current typing
+    });
+
+    socket.on('addMember',function(data){
+        createMemberElement(data);
+    });
+
+    socket.on('deleteMember',function(data){
+        deleteMemberElement(data);
+    });
+
+    socket.on('message',function(data){
+        createMessageElement(data);
+    });
+
+    /*
+        DOM EventListener
+    */
+    name_button.addEventListener('click',function(e){
+        my_name = name_input.value;
+        socket.emit("requestUpdateName",{id:my_name,name:my_name});
+    });
+
+    message_button.addEventListener('click',function(e){
+        socket.emit("sendMessage",{message:message_input.value,id:my_id,name:my_name,time:new Date()});
+        message_input.value = "";
+    });
+
+
+    /*
+        control DOM module
+    */
+
+    function createMessageElement(messageObj){
+
+        messageObj.messageId = createUniqWindowId();
+
+        var panel_div = document.createElement("div");
+        var panel_head_div = document.createElement("div");
+        var panel_body_div = document.createElement("div");
+        var panel_head_name_span = document.createElement("span");
+        var panel_head_time_span = document.createElement("span");
+        var panel_body_p = document.createElement("p");
+
+        panel_div.className = "panel panel-warning";
+        panel_div.id = messageObj.messageId;
+        panel_div.style.height = "100%";
+
+        panel_head_div.className = "panel-heading";
+        panel_body_div.className = "panel-body";
+
+        panel_head_name_span.innerHTML = messageObj.name;
+        panel_head_name_span.id = messageObj.messageId + "name";
+        panel_head_time_span.innerHTML = " ("+messageObj.time+")";
+
+        panel_body_p.innerHTML = messageObj.message;
+
+        messages.push(messageObj);
+
+        panel_body_div.appendChild(panel_body_p);
+        panel_head_div.appendChild(panel_head_name_span);
+        panel_head_div.appendChild(panel_head_time_span);
+        panel_div.appendChild(panel_head_div);
+        panel_div.appendChild(panel_body_div);
+
+        message_div.appendChild(panel_div);
+    }
+
+    function updateMessageName(member){
+        const targetList = messages.filter(function(elm,ind,arr){
+          console.log(elm.id);
+          console.log(member.id);
+            if(elm.id == member.id){
+              elm.name = member.name;
+              return true;
+            }else{
+              return false;
+            }
+        });
+
+        targetList.forEach(function(elm,ind,arr){
+              const target = document.getElementById(elm.messageId+"name");
+              target.innerHTML = elm.name;
+        });
+
+        return true;
+    }
+
+    function createMemberElement(member){
+        members.push(member);
+        const member_name_p = document.createElement("p");
+        member_name_p.id = member.id;
+        member_name_p.innerHTML = member.name;
+        members_div.appendChild(member_name_p);
+        return true;
+    }
+
+    function updateMemberElement(member){
+        const target = document.getElementById(member.id);
+        target.innerHTML = member.name;
+        return true;
+    }
+
+    function deleteMemberElement(member){
+      const target = document.getElementById(member.id);
+      members_div.removeChild(target);
+      return true;
+    }
+
+    function createUniqWindowId(){
+      return Math.random().toString(36).slice(-8);
+    }
+
+  </script>
+</body>
+</html>
